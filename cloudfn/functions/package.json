@@ -1,0 +1,11 @@
+{
+    "name": "cloudfns",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "googleapis": "^22.2.0"
+    }
+}
