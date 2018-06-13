@@ -27,6 +27,8 @@ This script runs the 'gcloud functions deploy' command
 
 ## Dataflow 
 
-The templated Dataflow pipeline gets invoked via a Cloud Function trigger listning on a particular GCS bucket. The cloud function passes the fully qualified path of the file to the templated dataflow located in GCS. The Dataflow pipeline reads the newly landed file and loads into BigQuery. Also as a side output, the meta data about the job execution is written out to Cloud DataStore DB.
+The templated Dataflow pipeline gets invoked via a Cloud Function trigger listning on a particular GCS bucket. The cloud function passes the fully qualified path of the file to the templated dataflow located in GCS. 
+
+The Dataflow pipeline reads the newly landed file and loads into BigQuery. Also as a side output, the meta data about the job execution is written out to Cloud DataStore DB.
 
 Note: By commenting out the --templete_location pipeline argument, the dataflow pipeline can be invoked directly.
