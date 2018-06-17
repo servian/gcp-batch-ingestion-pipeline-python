@@ -13,15 +13,17 @@ from apache_beam.io.gcp.datastore.v1.datastoreio import WriteToDatastore
 
 
 # Setting up project variables
-PROJECT = "your_project_id"
-BUCKET = 'your_GCS_bucket_name'
-DATASET = 'your_dataset_name'
-SCHEMA = 'File_Schema in the format of Column_Name:Data_Type,.. '
-defaultInputFile = 'gs://{0}/*.csv'.format(BUCKET)
+PROJECT = "gcp-batch-pattern"
+BUCKET = 'servian_melb_practice'
+DATASET = 'test_batch_servian'
+SCHEMA = 'GlobalRank:INTEGER,TldRank:INTEGER,Domain:STRING,TLD:STRING,RefSubNets:INTEGER,RefIPs:INTEGER,IDN_Domain:STRING,' \
+         'IDN_TLD:STRING,PrevGlobalRank:INTEGER,PrevTldRank:INTEGER,PrevRefSubNets:INTEGER,PrevRefIPs:INTEGER'
+TLD_SCHEMA = 'TLD:STRING,Count:INTEGER'
+defaultInputFile = '/Users/ryanmorris/Documents/majestic_thousand.csv'
 
 
 # Setting up the Environment variable
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = 'Service_Account json file path'
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = '/Users/ryanmorris/Documents/gcp-batch-pattern-c9b78b596152.json'
 
 
 
@@ -33,7 +35,6 @@ class Split(beam.DoFn):
         rows = element.split(',')
         header = map(lambda x: x.split(':')[0], SCHEMA.split(','))
         return [dict(zip(header, rows))]
-
 
 # Class to create metadata of loaded file
 class GetMetaData(beam.DoFn):
@@ -69,8 +70,6 @@ def create_ds_entity(element):
     datastore_helper.add_properties(entity,element)
     return entity
 
-
-
 # Main run method
 def run(argv=None):
 
@@ -81,7 +80,8 @@ def run(argv=None):
         '--staging_location=gs://{0}/staging/'.format(BUCKET),
         '--temp_location=gs://{0}/temp/'.format(BUCKET),
         '--runner=DataflowRunner',
-        '--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET), #Dataflow template name
+        '--inputFile=gs://{0}/Sample_Data/majestic_million.csv'.format(BUCKET),
+        '--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
         '--zone=australia-southeast1-a'
       #  '--region=australia-southeast1',
         ]
@@ -94,24 +94,33 @@ def run(argv=None):
 
     with beam.Pipeline(options=pipeline_options) as p:
 
-
         # Extract records as dictionaries
         records =(
             p
             | 'Read File' >> beam.io.ReadFromText(input,skip_header_lines=1)
-            | 'Parse CSV' >> beam.ParDo(Split())
+            | 'Parse CSV' >> beam.ParDo(Split()))
+
+        # Write TLD aggregations to BigQuery
+        (records | 'Get TLD from record' >> beam.Map(lambda x: (x['TLD'], 1))
+                 | 'Aggregate By TLD' >> beam.CombinePerKey(beam.combiners.CountCombineFn())
+                 | 'Count' >> beam.Map(lambda x: {'TLD': x[0], 'Count': x[1]})
+                 | 'Write TLD BQ' >> beam.io.WriteToBigQuery(
+                        '{0}:{1}.TLDCounts'.format(PROJECT, DATASET), # Enter your table name
+                        schema=TLD_SCHEMA,
+                        create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
+                        write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE
+
+                )
         )
 
         # Write data to BigQuery
-        (
-            records
-            | 'Write BQ' >> beam.io.WriteToBigQuery
-             (
-                '{0}:{1}.Majestic_Web_Data'.format(PROJECT, DATASET), # Enter your table name
+        (records
+            | 'Write Items BQ' >> beam.io.WriteToBigQuery(
+                '{0}:{1}.TopSites'.format(PROJECT, DATASET), # Enter your table name
                 schema=SCHEMA,
                 create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
                 write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE
-             )
+            )
         )
 
 
