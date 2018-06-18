@@ -1,7 +1,7 @@
 const google = require('googleapis');
 
-const PROJECT_ID = "your_project_id";
-const TEMPLATE_BUCKET = "your_template_bucket";
+const PROJECT_ID = "gcp-batch-pattern";
+const TEMPLATE_BUCKET = "servian_melb_practice";
 const TEMPLATE_PATH = "templates/template";
 const JOB_NAME = "cloud-fn-dataflow";
 const FINALIZE = "google.storage.object.finalize";

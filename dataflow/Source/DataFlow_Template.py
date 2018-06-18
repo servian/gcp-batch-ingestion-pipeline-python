@@ -19,7 +19,7 @@ DATASET = 'test_batch_servian'
 SCHEMA = 'GlobalRank:INTEGER,TldRank:INTEGER,Domain:STRING,TLD:STRING,RefSubNets:INTEGER,RefIPs:INTEGER,IDN_Domain:STRING,' \
          'IDN_TLD:STRING,PrevGlobalRank:INTEGER,PrevTldRank:INTEGER,PrevRefSubNets:INTEGER,PrevRefIPs:INTEGER'
 TLD_SCHEMA = 'TLD:STRING,Count:INTEGER'
-defaultInputFile = '/Users/ryanmorris/Documents/majestic_thousand.csv'
+defaultInputFile = 'gs://{0}/Sample_Data/majestic_million.csv'.format(BUCKET)
 
 
 # Setting up the Environment variable
@@ -75,18 +75,15 @@ def run(argv=None):
 
     pipeline_args =[
         '--project={0}'.format(PROJECT),
-        '--job_name=gcs2bqsample5',
+        '--job_name=majesticmillion',
         '--save_main_session',
         '--staging_location=gs://{0}/staging/'.format(BUCKET),
         '--temp_location=gs://{0}/temp/'.format(BUCKET),
         '--runner=DataflowRunner',
-        '--inputFile=gs://{0}/Sample_Data/majestic_million.csv'.format(BUCKET),
-        '--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
+        # '--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
         '--zone=australia-southeast1-a'
       #  '--region=australia-southeast1',
         ]
-
-
     pipeline_options = PipelineOptions(pipeline_args)
     pipeline_options.view_as(SetupOptions).save_main_session = True
     inbound_options = pipeline_options.view_as(FileLoader)
@@ -100,11 +97,11 @@ def run(argv=None):
             | 'Read File' >> beam.io.ReadFromText(input,skip_header_lines=1)
             | 'Parse CSV' >> beam.ParDo(Split()))
 
-        # Write TLD aggregations to BigQuery
+        # Write TLD aggregations to BigTable
         (records | 'Get TLD from record' >> beam.Map(lambda x: (x['TLD'], 1))
                  | 'Aggregate By TLD' >> beam.CombinePerKey(beam.combiners.CountCombineFn())
-                 | 'Count' >> beam.Map(lambda x: {'TLD': x[0], 'Count': x[1]})
-                 | 'Write TLD BQ' >> beam.io.WriteToBigQuery(
+                 | 'Count Per TLD' >> beam.Map(lambda x: {'TLD': x[0], 'Count': x[1]})
+                 | 'Write TLD BigTable' >> beam.io.WriteToBigQuery(
                         '{0}:{1}.TLDCounts'.format(PROJECT, DATASET), # Enter your table name
                         schema=TLD_SCHEMA,
                         create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
