@@ -80,7 +80,7 @@ def run(argv=None):
         '--staging_location=gs://{0}/staging/'.format(BUCKET),
         '--temp_location=gs://{0}/temp/'.format(BUCKET),
         '--runner=DataflowRunner',
-        # '--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
+        '--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
         '--zone=australia-southeast1-a'
       #  '--region=australia-southeast1',
         ]
