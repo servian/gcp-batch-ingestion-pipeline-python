@@ -36,6 +36,15 @@ class Split(beam.DoFn):
         header = map(lambda x: x.split(':')[0], SCHEMA.split(','))
         return [dict(zip(header, rows))]
 
+
+class CountTLDs(beam.PTransform):
+
+    def expand(self, pcoll):
+        return (pcoll
+            | 'Aggregate' >> beam.CombinePerKey(beam.combiners.CountCombineFn())
+            | 'Count' >> beam.Map(lambda x: {'TLD': x[0], 'Count': x[1]}))
+
+
 # Class to create metadata of loaded file
 class GetMetaData(beam.DoFn):
 
@@ -79,6 +88,7 @@ def run(argv=None):
         '--save_main_session',
         '--staging_location=gs://{0}/staging/'.format(BUCKET),
         '--temp_location=gs://{0}/temp/'.format(BUCKET),
+        '--num_workers=4',
         '--runner=DataflowRunner',
         '--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
         '--zone=australia-southeast1-a'
@@ -99,9 +109,8 @@ def run(argv=None):
 
         # Write TLD aggregations to BigTable
         (records | 'Get TLD from record' >> beam.Map(lambda x: (x['TLD'], 1))
-                 | 'Aggregate By TLD' >> beam.CombinePerKey(beam.combiners.CountCombineFn())
-                 | 'Count Per TLD' >> beam.Map(lambda x: {'TLD': x[0], 'Count': x[1]})
-                 | 'Write TLD BigTable' >> beam.io.WriteToBigQuery(
+                 | 'Aggregate TLDS' >> CountTLDs()
+                 | 'Write TLDs to BigQuery' >> beam.io.WriteToBigQuery(
                         '{0}:{1}.TLDCounts'.format(PROJECT, DATASET), # Enter your table name
                         schema=TLD_SCHEMA,
                         create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,

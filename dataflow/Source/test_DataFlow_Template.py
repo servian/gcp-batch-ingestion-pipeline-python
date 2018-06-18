@@ -9,6 +9,13 @@ class SplitTest(unittest.TestCase):
         result = split.process("1,2,3,4,5,6,7,8,9,10,11,12")[0]
         self.assertDictEqual(expected, result)
 
+class CountTest(unittest.TestCase):
+    def test_CountTLDs_shouldReturnObjectFromLine(self):
+        split = DataFlow_Template.CountTLDs()
+        expected = [{'Count': 1, 'TLD': 'au'}, {'Count': 2, 'TLD': 'com'}]
+        result = split.expand([('au', 1), ('com', 1), ('com', 1)])
+        self.assertEqual(expected, result)
+
 def main():
     unittest.main()
 
