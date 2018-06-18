@@ -41,6 +41,7 @@ class CountTLDs(beam.PTransform):
 
     def expand(self, pcoll):
         return (pcoll
+            | 'Get TLD from record' >> beam.Map(lambda x: (x['TLD'], 1))
             | 'Aggregate' >> beam.CombinePerKey(beam.combiners.CountCombineFn())
             | 'Count' >> beam.Map(lambda x: {'TLD': x[0], 'Count': x[1]}))
 
@@ -107,9 +108,8 @@ def run(argv=None):
             | 'Read File' >> beam.io.ReadFromText(input,skip_header_lines=1)
             | 'Parse CSV' >> beam.ParDo(Split()))
 
-        # Write TLD aggregations to BigTable
-        (records | 'Get TLD from record' >> beam.Map(lambda x: (x['TLD'], 1))
-                 | 'Aggregate TLDS' >> CountTLDs()
+        # Write TLD aggregations to BigQuery
+        (records | 'Aggregate TLDS' >> CountTLDs()
                  | 'Write TLDs to BigQuery' >> beam.io.WriteToBigQuery(
                         '{0}:{1}.TLDCounts'.format(PROJECT, DATASET), # Enter your table name
                         schema=TLD_SCHEMA,
@@ -131,8 +131,7 @@ def run(argv=None):
 
 
         # Write metadata to Datastore
-        (
-            records
+        (records
             | 'Get Record Count' >> beam.combiners.Count.Globally()
             | 'Create Metadata' >> beam.ParDo(GetMetaData(inbound_options.inputFile))
             | 'Create DS Entity' >> beam.Map(lambda x : create_ds_entity(x))
