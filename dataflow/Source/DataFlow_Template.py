@@ -1,18 +1,12 @@
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
-import os
 from apache_beam.options.pipeline_options import SetupOptions
 import datetime
 import uuid
-
-
 from google.cloud.proto.datastore.v1 import entity_pb2
 from googledatastore import helper as datastore_helper
 from apache_beam.io.gcp.datastore.v1.datastoreio import WriteToDatastore
 
-
-
-# Setting up project variables
 PROJECT = "gcp-batch-pattern"
 BUCKET = 'servian_melb_practice'
 DATASET = 'test_batch_servian'
@@ -21,14 +15,66 @@ SCHEMA = 'GlobalRank:INTEGER,TldRank:INTEGER,Domain:STRING,TLD:STRING,RefSubNets
 TLD_SCHEMA = 'TLD:STRING,Count:INTEGER'
 defaultInputFile = 'gs://{0}/Sample_Data/majestic_million.csv'.format(BUCKET)
 
+def run(argv=None):
 
-# Setting up the Environment variable
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = '/Users/ryanmorris/Documents/gcp-batch-pattern-c9b78b596152.json'
+    pipeline_args =[
+        '--project={0}'.format(PROJECT),
+        '--job_name=majesticmillion',
+        '--save_main_session',
+        '--staging_location=gs://{0}/staging/'.format(BUCKET),
+        '--temp_location=gs://{0}/temp/'.format(BUCKET),
+        '--num_workers=4',
+        '--runner=DataflowRunner',
+        '--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
+        '--zone=australia-southeast1-a'
+      #  '--region=australia-southeast1',
+        ]
+    pipeline_options = PipelineOptions(pipeline_args)
+    pipeline_options.view_as(SetupOptions).save_main_session = True
+    inbound_options = pipeline_options.view_as(FileLoader)
+    input = inbound_options.inputFile
+
+    with beam.Pipeline(options=pipeline_options) as p:
+
+        # Extract records as dictionaries
+        records =(
+            p
+            | 'Read File' >> beam.io.ReadFromText(input,skip_header_lines=1)
+            | 'Parse CSV' >> beam.ParDo(Split()))
+
+        # Write TLD aggregations to BigQuery
+        (records | 'Aggregate TLDS' >> CountTLDs()
+                 | 'Write TLDs to BigQuery' >> beam.io.WriteToBigQuery(
+                        '{0}:{1}.TLDCounts'.format(PROJECT, DATASET), # Enter your table name
+                        schema=TLD_SCHEMA,
+                        create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
+                        write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE
+
+                )
+        )
+
+        # Write all records to BigQuery
+        (records
+            | 'Write Items BQ' >> beam.io.WriteToBigQuery(
+                '{0}:{1}.TopSites'.format(PROJECT, DATASET), # Enter your table name
+                schema=SCHEMA,
+                create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
+                write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE
+            )
+        )
 
 
+        # Write metadata to Datastore
+        (records
+            | 'Get Record Count' >> beam.combiners.Count.Globally()
+            | 'Create Metadata' >> beam.ParDo(GetMetaData(inbound_options.inputFile))
+            | 'Create DS Entity' >> beam.Map(lambda x : create_ds_entity(x))
+            | 'Write To DS' >> WriteToDatastore(PROJECT)
+        )
+
+    p.run()
 
 # Class to split the CSV file and format as per the Schema
-
 class Split(beam.DoFn):
 
     def process(self, element):
@@ -37,6 +83,7 @@ class Split(beam.DoFn):
         return [dict(zip(header, rows))]
 
 
+# Class to create an aggregation of TLD's with count
 class CountTLDs(beam.PTransform):
 
     def expand(self, pcoll):
@@ -79,66 +126,6 @@ def create_ds_entity(element):
     datastore_helper.add_key_path(entity.key,kind,str(uuid.uuid4()))
     datastore_helper.add_properties(entity,element)
     return entity
-
-# Main run method
-def run(argv=None):
-
-    pipeline_args =[
-        '--project={0}'.format(PROJECT),
-        '--job_name=majesticmillion',
-        '--save_main_session',
-        '--staging_location=gs://{0}/staging/'.format(BUCKET),
-        '--temp_location=gs://{0}/temp/'.format(BUCKET),
-        '--num_workers=4',
-        '--runner=DataflowRunner',
-        '--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
-        '--zone=australia-southeast1-a'
-      #  '--region=australia-southeast1',
-        ]
-    pipeline_options = PipelineOptions(pipeline_args)
-    pipeline_options.view_as(SetupOptions).save_main_session = True
-    inbound_options = pipeline_options.view_as(FileLoader)
-    input = inbound_options.inputFile
-
-    with beam.Pipeline(options=pipeline_options) as p:
-
-        # Extract records as dictionaries
-        records =(
-            p
-            | 'Read File' >> beam.io.ReadFromText(input,skip_header_lines=1)
-            | 'Parse CSV' >> beam.ParDo(Split()))
-
-        # Write TLD aggregations to BigQuery
-        (records | 'Aggregate TLDS' >> CountTLDs()
-                 | 'Write TLDs to BigQuery' >> beam.io.WriteToBigQuery(
-                        '{0}:{1}.TLDCounts'.format(PROJECT, DATASET), # Enter your table name
-                        schema=TLD_SCHEMA,
-                        create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
-                        write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE
-
-                )
-        )
-
-        # Write data to BigQuery
-        (records
-            | 'Write Items BQ' >> beam.io.WriteToBigQuery(
-                '{0}:{1}.TopSites'.format(PROJECT, DATASET), # Enter your table name
-                schema=SCHEMA,
-                create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
-                write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE
-            )
-        )
-
-
-        # Write metadata to Datastore
-        (records
-            | 'Get Record Count' >> beam.combiners.Count.Globally()
-            | 'Create Metadata' >> beam.ParDo(GetMetaData(inbound_options.inputFile))
-            | 'Create DS Entity' >> beam.Map(lambda x : create_ds_entity(x))
-            | 'Write To DS' >> WriteToDatastore(PROJECT)
-        )
-
-    p.run()
 
 
 if __name__ == '__main__':
