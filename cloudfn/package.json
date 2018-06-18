@@ -7,7 +7,7 @@
     "build": "babel app --out-dir functions --copy-files --ignore app/node_modules",
     "postbuild": "cd functions && npm i -s",
     "deploy": "npm run build && npm run gcloud",
-    "gcloud": "cd functions && gcloud beta functions deploy trigger --stage-bucket=your_staging_bucket --trigger-bucket=your_in_file_bucket",
+    "gcloud": "cd functions && gcloud beta functions deploy trigger --stage-bucket=servian_melb_practice --trigger-bucket=servian_melb_in_files",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
