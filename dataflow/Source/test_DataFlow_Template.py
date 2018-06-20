@@ -22,9 +22,9 @@ class DataflowTest(unittest.TestCase):
         result = split.process("1,2,3,4,5,6,7,8,9,10,11,12", SCHEMA)[0]
         self.assertDictEqual(expected, result)
 
-    def test_CountTLDs_shouldReturnTLDsWithCount(self):
+    def test_CountTLDs_shouldReturnFilteredTLDsWithCount(self):
         countTLDS = DataFlow_Template.CountTLDs()
-        expected = [{'Count': 2, 'TLD': 'au'}, {'Count': 1, 'TLD': 'com'}]
+        expected = [{'Count': 2, 'TLD': 'au'}]
         result = countTLDS.expand(self.testCollection)
         self.assertEqual(expected, result)
 
@@ -46,6 +46,7 @@ class DataflowTest(unittest.TestCase):
 
         testInstance = DataFlow_Template.AddDTLDDesc()
         result = testInstance.process(self.testCollection[0], { 'au' : 'Australia', 'us' : 'United States'})
+        print(result)
         self.assertDictEqual(expected, result[0])
 
 def main():

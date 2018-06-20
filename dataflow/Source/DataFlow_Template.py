@@ -39,7 +39,7 @@ def run(argv=None):
     input = inbound_options.inputFile
 
     with beam.Pipeline(options=pipeline_options) as p:
-        TLD_Desc =(
+        TLD_Desc = (
             p
             |'Read TLD Description File' >> beam.io.ReadFromText(TLDFile)
             |'Parse Descriptions' >> beam.ParDo(combine_TLD())
@@ -99,16 +99,26 @@ class combine_TLD(beam.DoFn):
         rows = element.split(',')
         return [{rows[0]:rows[1]}]
 
+# Filters non country TLDs
+class FilterNonCountries(beam.DoFn):
+
+    def process(self, element, exclude):
+        if element['TLD'] not in exclude:
+            return [element]
+
+
 
 # Class to create an aggregation of TLD's with count
 class CountTLDs(beam.PTransform):
 
+    excludeList = ('com', 'info', 'org', 'net')
+
     def expand(self, pcoll):
         return (pcoll
+            | 'Filter' >> beam.ParDo(FilterNonCountries(), self.excludeList)
             | 'Get TLD from record' >> beam.Map(lambda x: (x['TLD'], 1))
             | 'Aggregate' >> beam.CombinePerKey(beam.combiners.CountCombineFn())
             | 'Count' >> beam.Map(lambda x: {'TLD': x[0], 'Count': x[1]}))
-
 
 # Class to create metadata of loaded file
 class GetMetaData(beam.DoFn):
@@ -141,7 +151,7 @@ class AddDTLDDesc(beam.DoFn):
             element['TLD_Desc'] = TLDDesc[element['TLD']]
         except KeyError:
             element['TLD_Desc'] = 'No Description Found'
-        #print element
+        # #print element
         return [element]
 
 
