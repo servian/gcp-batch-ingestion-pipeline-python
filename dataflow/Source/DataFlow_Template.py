@@ -12,8 +12,11 @@ BUCKET = 'servian_melb_practice'
 DATASET = 'test_batch_servian'
 SCHEMA = 'GlobalRank:INTEGER,TldRank:INTEGER,Domain:STRING,TLD:STRING,RefSubNets:INTEGER,RefIPs:INTEGER,IDN_Domain:STRING,' \
          'IDN_TLD:STRING,PrevGlobalRank:INTEGER,PrevTldRank:INTEGER,PrevRefSubNets:INTEGER,PrevRefIPs:INTEGER'
+DESCRIPTIONSCHEMA = "TLD_DESC:STRING"
 TLD_SCHEMA = 'TLD:STRING,Count:INTEGER'
 defaultInputFile = 'gs://{0}/Sample_Data/majestic_million.csv'.format(BUCKET)
+TLDFile = 'gs://{0}/Sample_Data/tlds.csv'.format(BUCKET)
+
 
 def run(argv=None):
 
@@ -25,7 +28,8 @@ def run(argv=None):
         '--temp_location=gs://{0}/temp/'.format(BUCKET),
         '--num_workers=4',
         '--runner=DataflowRunner',
-        '--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
+        '--inputFile=gs://{0}/Sample_Data/majestic_million.csv'.format(BUCKET),
+        #'--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
         '--zone=australia-southeast1-a'
       #  '--region=australia-southeast1',
         ]
@@ -35,12 +39,19 @@ def run(argv=None):
     input = inbound_options.inputFile
 
     with beam.Pipeline(options=pipeline_options) as p:
-
+        TLD_Desc =(
+            p
+            |'Read TLD Description File' >> beam.io.ReadFromText(TLDFile)
+            |'Parse Descriptions' >> beam.ParDo(combine_TLD())
+            |'Combine Descriptions to Dictionary' >> beam.CombineGlobally(combine_pdict)
+            )
         # Extract records as dictionaries
         records =(
             p
             | 'Read File' >> beam.io.ReadFromText(input,skip_header_lines=1)
-            | 'Parse CSV' >> beam.ParDo(Split()))
+            | 'Parse CSV' >> beam.ParDo(Split(),SCHEMA)
+            | 'Add Descriptions' >> beam.ParDo(AddDTLDDesc(),beam.pvalue.AsSingleton(TLD_Desc))
+            )
 
         # Write TLD aggregations to BigQuery
         (records | 'Aggregate TLDS' >> CountTLDs()
@@ -57,7 +68,7 @@ def run(argv=None):
         (records
             | 'Write Items BQ' >> beam.io.WriteToBigQuery(
                 '{0}:{1}.TopSites'.format(PROJECT, DATASET), # Enter your table name
-                schema=SCHEMA,
+                schema=SCHEMA+","+DESCRIPTIONSCHEMA,
                 create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
                 write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE
             )
@@ -77,10 +88,16 @@ def run(argv=None):
 # Class to split the CSV file and format as per the Schema
 class Split(beam.DoFn):
 
+    def process(self, element,schema):
+        rows = element.split(',')
+        header = map(lambda x: x.split(':')[0], schema.split(','))
+        return [dict(zip(header, rows))]
+
+class combine_TLD(beam.DoFn):
+
     def process(self, element):
         rows = element.split(',')
-        header = map(lambda x: x.split(':')[0], SCHEMA.split(','))
-        return [dict(zip(header, rows))]
+        return [{rows[0]:rows[1]}]
 
 
 # Class to create an aggregation of TLD's with count
@@ -117,6 +134,16 @@ class FileLoader(PipelineOptions):
                                            help='Input file to process'
                                            )
 
+class AddDTLDDesc(beam.DoFn):
+
+    def process(self, element,TLDDesc):
+        try:
+            element['TLD_Desc'] = TLDDesc[element['TLD']]
+        except KeyError:
+            element['TLD_Desc'] = 'No Description Found'
+        #print element
+        return [element]
+
 
 # This creates a datastore entity to be pushed to datastore
 def create_ds_entity(element):
@@ -126,6 +153,16 @@ def create_ds_entity(element):
     datastore_helper.add_key_path(entity.key,kind,str(uuid.uuid4()))
     datastore_helper.add_properties(entity,element)
     return entity
+
+
+
+def combine_pdict(pdict):
+    def merge_dict(x, y):
+        x.update(y)
+        return x
+    return reduce(merge_dict,pdict,{})
+
+
 
 
 if __name__ == '__main__':
