@@ -16,13 +16,14 @@ DESCRIPTIONSCHEMA = "TLD_DESC:STRING"
 TLD_SCHEMA = 'TLD:STRING,Count:INTEGER'
 defaultInputFile = 'gs://{0}/Sample_Data/majestic_million.csv'.format(BUCKET)
 TLDFile = 'gs://{0}/Sample_Data/tlds.csv'.format(BUCKET)
+excludedTLDFile = 'gs://{0}/Sample_Data/excludes.csv'.format(BUCKET)
 
 
 def run(argv=None):
 
     pipeline_args =[
         '--project={0}'.format(PROJECT),
-        '--job_name=majesticmillion',
+        '--job_name=majesticmillion1',
         '--save_main_session',
         '--staging_location=gs://{0}/staging/'.format(BUCKET),
         '--temp_location=gs://{0}/temp/'.format(BUCKET),
@@ -45,16 +46,23 @@ def run(argv=None):
             |'Parse Descriptions' >> beam.ParDo(combine_TLD())
             |'Combine Descriptions to Dictionary' >> beam.CombineGlobally(combine_pdict)
             )
+
+        excludedTLDs = (
+            p
+            |'Read excuded TLD file' >> beam.io.ReadFromText(excludedTLDFile)
+            |'Get list of excluded TLD' >> beam.ParDo(lambda x: x.split(','))
+        )
+
         # Extract records as dictionaries
         records =(
             p
             | 'Read File' >> beam.io.ReadFromText(input,skip_header_lines=1)
             | 'Parse CSV' >> beam.ParDo(Split(),SCHEMA)
-            | 'Add Descriptions' >> beam.ParDo(AddDTLDDesc(),beam.pvalue.AsSingleton(TLD_Desc))
+            | 'Add Descriptions' >> beam.ParDo(AddDTLDDesc(), beam.pvalue.AsSingleton(TLD_Desc))
             )
 
         # Write TLD aggregations to BigQuery
-        (records | 'Aggregate TLDS' >> CountTLDs()
+        (records | 'Aggregate TLDS' >> CountTLDs(excludedTLDs)
                  | 'Write TLDs to BigQuery' >> beam.io.WriteToBigQuery(
                         '{0}:{1}.TLDCounts'.format(PROJECT, DATASET), # Enter your table name
                         schema=TLD_SCHEMA,
@@ -102,8 +110,8 @@ class combine_TLD(beam.DoFn):
 # Filters non country TLDs
 class FilterNonCountries(beam.DoFn):
 
-    def process(self, element, exclude):
-        if element['TLD'] not in exclude:
+    def process(self, element, excludes):
+        if element['TLD'] not in excludes:
             return [element]
 
 
@@ -111,11 +119,12 @@ class FilterNonCountries(beam.DoFn):
 # Class to create an aggregation of TLD's with count
 class CountTLDs(beam.PTransform):
 
-    excludeList = ('com', 'info', 'org', 'net')
+    def __init__(self, excludes):
+        self.excludes = excludes
 
     def expand(self, pcoll):
         return (pcoll
-            | 'Filter' >> beam.ParDo(FilterNonCountries(), self.excludeList)
+            | 'Filter' >> beam.ParDo(FilterNonCountries(), beam.pvalue.AsList(self.excludes))
             | 'Get TLD from record' >> beam.Map(lambda x: (x['TLD'], 1))
             | 'Aggregate' >> beam.CombinePerKey(beam.combiners.CountCombineFn())
             | 'Count' >> beam.Map(lambda x: {'TLD': x[0], 'Count': x[1]}))

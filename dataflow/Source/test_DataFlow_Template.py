@@ -1,17 +1,22 @@
 import unittest
-import DataFlow_Template;
+import DataFlow_Template
+import apache_beam as beam
+from apache_beam.testing.test_pipeline import TestPipeline
+from apache_beam.testing.util import assert_that
+from apache_beam.testing.util import equal_to
 
 class DataflowTest(unittest.TestCase):
 
     testCollection = [{'PrevRefIPs': '12', 'TLD': 'au', 'IDN_Domain': '7', 'PrevGlobalRank': '9', 'TldRank': '2',
-                       'Domain': '3', 'PrevTldRank': '10', 'RefIPs': '6', 'RefSubNets': '5', 'IDN_TLD': '8',
-                       'GlobalRank': '1', 'PrevRefSubNets': '11'},
-                      {'PrevRefIPs': '12', 'TLD': 'com', 'IDN_Domain': '7', 'PrevGlobalRank': '9', 'TldRank': '2',
-                       'Domain': '3', 'PrevTldRank': '10', 'RefIPs': '6', 'RefSubNets': '5', 'IDN_TLD': '8',
-                       'GlobalRank': '1', 'PrevRefSubNets': '11'},
-                      {'PrevRefIPs': '12', 'TLD': 'au', 'IDN_Domain': '7', 'PrevGlobalRank': '9', 'TldRank': '2',
-                       'Domain': '3', 'PrevTldRank': '10', 'RefIPs': '6', 'RefSubNets': '5', 'IDN_TLD': '8',
-                       'GlobalRank': '1', 'PrevRefSubNets': '11'}]
+                           'Domain': '3', 'PrevTldRank': '10', 'RefIPs': '6', 'RefSubNets': '5', 'IDN_TLD': '8',
+                           'GlobalRank': '1', 'PrevRefSubNets': '11'},
+                          {'PrevRefIPs': '12', 'TLD': 'com', 'IDN_Domain': '7', 'PrevGlobalRank': '9', 'TldRank': '2',
+                           'Domain': '3', 'PrevTldRank': '10', 'RefIPs': '6', 'RefSubNets': '5', 'IDN_TLD': '8',
+                           'GlobalRank': '1', 'PrevRefSubNets': '11'},
+                          {'PrevRefIPs': '12', 'TLD': 'au', 'IDN_Domain': '7', 'PrevGlobalRank': '9', 'TldRank': '2',
+                           'Domain': '3', 'PrevTldRank': '10', 'RefIPs': '6', 'RefSubNets': '5', 'IDN_TLD': '8',
+                           'GlobalRank': '1', 'PrevRefSubNets': '11'}]
+
 
     def test_Split_shouldReturnRecordFromLine(self):
         SCHEMA = 'GlobalRank:INTEGER,TldRank:INTEGER,Domain:STRING,TLD:STRING,RefSubNets:INTEGER,RefIPs:INTEGER,IDN_Domain:STRING,' \
@@ -23,10 +28,15 @@ class DataflowTest(unittest.TestCase):
         self.assertDictEqual(expected, result)
 
     def test_CountTLDs_shouldReturnFilteredTLDsWithCount(self):
-        countTLDS = DataFlow_Template.CountTLDs()
-        expected = [{'Count': 2, 'TLD': 'au'}]
-        result = countTLDS.expand(self.testCollection)
-        self.assertEqual(expected, result)
+
+        with TestPipeline() as p:
+            testPCollection = (p | beam.Create(self.testCollection))
+            excludes = (p | 'exclude' >> beam.Create(['com', 'net']))
+            countTLDS = DataFlow_Template.CountTLDs(excludes)
+            expected = [{'Count': 2, 'TLD': 'au'}]
+            result = countTLDS.expand(testPCollection)
+            assert_that(result, equal_to(expected))
+
 
     def test_AddDTLDDesc_shouldAddDescriptionToElement(self):
 
@@ -46,7 +56,6 @@ class DataflowTest(unittest.TestCase):
 
         testInstance = DataFlow_Template.AddDTLDDesc()
         result = testInstance.process(self.testCollection[0], { 'au' : 'Australia', 'us' : 'United States'})
-        print(result)
         self.assertDictEqual(expected, result[0])
 
 def main():
