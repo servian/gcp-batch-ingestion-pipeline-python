@@ -1,0 +1,2 @@
+googledatastore==7.0.1
+apache_beam==2.4.0
