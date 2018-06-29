@@ -30,7 +30,7 @@ def run(argv=None):
         '--num_workers=4',
         '--runner=DataflowRunner',
         '--inputFile=gs://{0}/Sample_Data/majestic_million.csv'.format(BUCKET),
-        #'--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
+        '--template_location=gs://{0}/templates/majestic_million_template'.format(BUCKET),
         '--zone=australia-southeast1-a'
       #  '--region=australia-southeast1',
         ]
