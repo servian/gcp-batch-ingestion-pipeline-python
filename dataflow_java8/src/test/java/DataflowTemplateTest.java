@@ -29,7 +29,7 @@ public class DataflowTemplateTest {
                     .set("TldRank", "2")
                     .set("Domain", "3")
                     .set("PrevRefIPs","12")
-                    .set("PrevRefSubNets", "11")
+                    .set("PrevRefSubNets","11")
                     .set("RefIPs","6")
                     .set("RefSubNets", "5")
                     .set("PrevGlobalRank","9")
@@ -38,12 +38,14 @@ public class DataflowTemplateTest {
                     .set("IDN_TLD","8")
                     .set("IDN_Domain","7");
 
+    private static final String HEADER_LINE = "GlobalRank,2,3,4,5,6,7,8,9,10,11,12";
     private static final String INPUT_LINE = "1,2,3,4,5,6,7,8,9,10,11,12";
 
     @Test
     @Category(ValidatesRunner.class)
-    public void stringToTableRow_shouldOutputTableRow() throws Exception {
+    public void stringToTableRow_shouldOutputTableRow() {
         List<String> list = new ArrayList<>();
+        list.add(HEADER_LINE);
         list.add(INPUT_LINE);
 
         PCollection<String> output = p.apply(Create.of(list))

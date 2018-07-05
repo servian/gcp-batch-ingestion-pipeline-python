@@ -19,11 +19,11 @@ import java.util.stream.IntStream;
 
 public class DataflowTemplate {
 
-    private static final String SCHEMA = "GlobalRank:INTEGER,TldRank:INTEGER,Domain:STRING,TLD:STRING,RefSubNets:INTEGER,RefIPs:INTEGER," +
-            "IDN_Domain:STRING,IDN_TLD:STRING,PrevGlobalRank:INTEGER,PrevTldRank:INTEGER,PrevRefSubNets:INTEGER,PrevRefIPs:INTEGER";
+    private static final String SCHEMA = "GlobalRank:INTEGER,TldRank:INTEGER,Domain:STRING,TLD:STRING,RefSubNets:STRING,RefIPs:STRING," +
+            "IDN_Domain:STRING,IDN_TLD:STRING,PrevGlobalRank:INTEGER,PrevTldRank:INTEGER,PrevRefSubNets:STRING,PrevRefIPs:STRING";
     private static final List<String> cols = Arrays.asList(SCHEMA.split(","));
 
-    public static interface MyPipelineOptions extends PipelineOptions {
+    public interface MyPipelineOptions extends PipelineOptions {
         @Description("Path of the file to read from")
         String getInputFile();
         void setInputFile(String value);
@@ -48,6 +48,7 @@ public class DataflowTemplate {
                 .apply("Write to BQ", BigQueryIO.writeTableRows()
                         .to(options.getTableName())
                         .withSchema(createTableSchema())
+                        .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED)
                         .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_TRUNCATE));
 
         // Run the pipeline.
@@ -91,8 +92,12 @@ public class DataflowTemplate {
         public void processElement(ProcessContext c) {
             Map<String, String> map = c.element();
             TableRow tableRow = new TableRow();
-            map.forEach(tableRow::set);
-            c.output(tableRow);
+            if(map.get("GlobalRank").equals("GlobalRank")) {
+                System.out.println("Ignoring header row");
+            } else {
+                map.forEach(tableRow::set);
+                c.output(tableRow);
+            }
         }
     }
 

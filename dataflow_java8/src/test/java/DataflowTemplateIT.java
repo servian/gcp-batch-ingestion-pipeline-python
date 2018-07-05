@@ -20,7 +20,8 @@ public class DataflowTemplateIT {
     public void test() {
         MyPipelineOptions options = TestPipeline.testingPipelineOptions().as(MyPipelineOptions.class);
         options.setInputFile("gs://servian_melb_in_files/majestic_thousand.csv");
-        options.setTableName("gcp-batch-pattern:test_batch_servian.TopSites");
+        options.setTableName("gcp-batch-pattern:test_batch_servian.TopSitesIT");
+        options.setTempLocation("gs://servian_melb_practice/temp");
         DataflowTemplate.run(options);
     }
 }
