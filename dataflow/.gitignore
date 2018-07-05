@@ -2,4 +2,5 @@ bin/*
 pyvenv.cfg
 lib/*
 .idea/*
+Source/*.pyc
 

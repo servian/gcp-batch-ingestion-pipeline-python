@@ -53,7 +53,7 @@ class DataflowTest(unittest.TestCase):
           'TLD': 'au',
           'TLD_Desc': 'Australia',
           'TldRank': '2'}
-        
+
 
         testInstance = DataFlow_Template.AddDTLDDesc()
         result = testInstance.process(self.testCollection[0], { 'au' : 'Australia', 'us' : 'United States'})
