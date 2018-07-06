@@ -1,7 +1,6 @@
 import com.google.api.services.bigquery.model.TableRow;
 import org.apache.beam.sdk.testing.PAssert;
 import org.apache.beam.sdk.testing.TestPipeline;
-import org.apache.beam.sdk.testing.TestPipelineOptions;
 import org.apache.beam.sdk.testing.ValidatesRunner;
 import org.apache.beam.sdk.transforms.Create;
 import org.apache.beam.sdk.transforms.ParDo;
@@ -17,8 +16,6 @@ import java.util.*;
 
 @RunWith(JUnit4.class)
 public class DataflowTemplateTest {
-
-    public interface MyPipelineOptions extends TestPipelineOptions, DataflowTemplate.MyPipelineOptions {}
 
     @Rule
     public TestPipeline p = TestPipeline.create();
